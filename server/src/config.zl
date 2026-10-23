@@ -1,0 +1,12 @@
+namespace todoserver
+
+import zconf
+
+// Settings of the service, bound by zconf from appsettings.yaml, an
+// optional .env, TODO_* environment variables and the command line.
+struct Settings {
+    @Conf(default: "127.0.0.1:8080", help: "listen address")                           Addr        string
+    @Conf(default: "todos.db", help: "SQLite database file (:memory: for none)")       Database    string
+    @Conf(oneOf: "development,production", default: "production", help: "environment") Environment string
+    @Conf(oneOf: "debug,info,warn,error", default: "info", help: "minimum log level")  LogLevel    string
+}

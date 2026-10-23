@@ -1,0 +1,71 @@
+// Use-case tests over the in-memory repository. `zell test` cannot run
+// async @test functions yet, so these are async examples: zell test runs
+// them and compares their output with the // Output: comment.
+namespace todo.app
+
+import io
+
+import todo.domain
+import todo.infra
+
+func service() *TodoService {
+    return TodoService.New(MemoryRepository.New())
+}
+
+async func ExampleTodoService_Create() void! {
+    var s = service()
+    var created = await s.Create("  write tests  ")?
+    println(created.Id, created.Title, created.Done)
+    var got = await s.Get(created.Id)?
+    println(got.Title)
+    try await s.Create("   ") catch err {
+        var v ValidationError
+        println(errors.As(err, &v), v.Field, "-", v.Reason)
+    }
+    try await s.Create(strings.Repeat("x", 101)) catch err {
+        println(err)
+    }
+    // Output:
+    // 1 write tests false
+    // write tests
+    // true title - must not be empty
+    // title: must be at most 100 characters
+}
+
+async func ExampleTodoService_Get() {
+    try await service().Get(42) catch err {
+        println(err, "| not found:", errors.Is(err, ErrNotFound))
+    }
+    // Output:
+    // todo 42: todo not found | not found: true
+}
+
+async func ExampleTodoService_Complete() void! {
+    var s = service()
+    var t = await s.Create("ship")?
+    var done = await s.Complete(t.Id)?
+    println("done:", done.Done)
+    try await s.Complete(t.Id) catch err {
+        println(err, "| conflict:", errors.Is(err, ErrConflict))
+    }
+    // Output:
+    // done: true
+    // todo 1 is already done: conflict | conflict: true
+}
+
+async func ExampleTodoService_List() void! {
+    var s = service()
+    _ = await s.Create("a")?
+    var b = await s.Create("b")?
+    _ = await s.Complete(b.Id)?
+    println(len(await s.List(false)?), len(await s.List(true)?))
+    await s.Delete(b.Id)?
+    println(len(await s.List(false)?))
+    try await s.Delete(b.Id) catch err {
+        println(errors.Is(err, ErrNotFound))
+    }
+    // Output:
+    // 2 1
+    // 1
+    // true
+}

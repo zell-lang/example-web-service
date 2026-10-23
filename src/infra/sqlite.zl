@@ -1,0 +1,113 @@
+namespace todo.infra
+
+import data
+import database
+
+import todo.domain
+
+// TodoRow is the table row of a todo (the ORM entity; the domain type
+// stays free of storage attributes).
+@table("todos")
+struct TodoRow {
+    Id int
+    @maxLength(100) Title string
+    Done bool
+}
+
+// TodosDb is the data context of the service.
+struct TodosDb {
+    Context
+    Todos Set<TodoRow>
+}
+
+// Database holds the shared connection pool (registered as an instance).
+struct Database {
+    Db *sql.DB
+}
+
+// SqliteRepository stores todos in SQLite through the data ORM; the
+// lambdas in Where/OrderBy are translated to SQL at compile time.
+struct SqliteRepository {
+    db *sql.DB
+
+    static func New(d *Database) *SqliteRepository {
+        return new SqliteRepository{db: d.Db}
+    }
+
+    // A context per operation: the repository is a singleton.
+    func ctx() *TodosDb {
+        return data.OpenDB<TodosDb>(data.Provider.Sqlite, this.db)
+    }
+
+    // TodoRepository: methods return tasks (an interface cannot declare
+    // async methods yet), each runs the async implementation below.
+    func Add(t Todo) Task<Todo!> {
+        return this.add(t)
+    }
+
+    func Get(id int) Task<Todo!> {
+        return this.get(id)
+    }
+
+    func List(onlyOpen bool) Task<[]Todo!> {
+        return this.list(onlyOpen)
+    }
+
+    func Update(t Todo) Task<void!> {
+        return this.update(t)
+    }
+
+    func Delete(id int) Task<void!> {
+        return this.delete(id)
+    }
+
+    async func add(t Todo) Todo! {
+        var ctx = this.ctx()
+        var row = new TodoRow{Title: t.Title, Done: t.Done}
+        ctx.Todos.Add(row)
+        await ctx.SaveChanges()?
+        return toDomain(row)
+    }
+
+    async func get(id int) Todo! {
+        var rows = await this.ctx().Todos.AsNoTracking().Where((r) => r.Id == id).Take(1).ToList()?
+        if len(rows) == 0 {
+            return errors.Wrap(ErrNotFound, fmt.Format("todo {0}", id))
+        }
+        return toDomain(rows[0])
+    }
+
+    async func list(onlyOpen bool) []Todo! {
+        var q = this.ctx().Todos.AsNoTracking().OrderBy((r) => r.Id)
+        if onlyOpen {
+            q = q.Where((r) => r.Done == false)
+        }
+        var rows = await q.ToList()?
+        return slices.Map(rows, toDomain)
+    }
+
+    async func update(t Todo) void! {
+        var n = await this.ctx().Todos.Where((r) => r.Id == t.Id).ExecuteUpdate(
+            (s) => s.Set((r) => r.Title, t.Title).Set((r) => r.Done, t.Done),
+        )?
+        if n == 0 {
+            return errors.Wrap(ErrNotFound, fmt.Format("todo {0}", t.Id))
+        }
+    }
+
+    async func delete(id int) void! {
+        var n = await this.ctx().Todos.Where((r) => r.Id == id).ExecuteDelete()?
+        if n == 0 {
+            return errors.Wrap(ErrNotFound, fmt.Format("todo {0}", id))
+        }
+    }
+}
+
+// Migrate applies the migrations of the program (migrations.zl) to db.
+async func Migrate(db *sql.DB) void! {
+    await data.OpenDB<TodosDb>(data.Provider.Sqlite, db).Migrate()?
+}
+
+func toDomain(r *TodoRow) Todo {
+    return Todo{Id: r.Id, Title: r.Title, Done: r.Done}
+}

@@ -1,0 +1,27 @@
+// The domain: entities, invariants and errors. No framework imports.
+namespace todo.domain
+
+// MaxTitle is the longest title a todo may have.
+const MaxTitle = 100
+
+// Todo is one item of the list.
+struct Todo {
+    Id    int
+    Title string
+    Done  bool
+}
+
+// NewTodo validates a title and returns a todo that is not stored yet.
+func NewTodo(title string) Todo! {
+    var t = strings.Trim(title)
+    if t == "" {
+        return ValidationError{Field: "title", Reason: "must not be empty"}
+    }
+    if len(t) > MaxTitle {
+        return ValidationError{
+            Field: "title",
+            Reason: fmt.Format("must be at most {0} characters", MaxTitle),
+        }
+    }
+    return Todo{Title: t}
+}

@@ -1,0 +1,93 @@
+// Repositories: in-memory (tests, demos) and SQLite through the data ORM.
+namespace todo.infra
+
+import todo.domain
+
+// MemoryRepository keeps todos in a slice guarded by a task.Mutex.
+struct MemoryRepository {
+    mu     *task.Mutex
+    items  []Todo
+    nextId int
+
+    static func New() *MemoryRepository {
+        return new MemoryRepository{mu: new task.Mutex{}, items: [], nextId: 1}
+    }
+
+    // TodoRepository: methods return tasks (an interface cannot declare
+    // async methods yet), each runs the async implementation below.
+    func Add(t Todo) Task<Todo!> {
+        return this.add(t)
+    }
+
+    func Get(id int) Task<Todo!> {
+        return this.get(id)
+    }
+
+    func List(onlyOpen bool) Task<[]Todo!> {
+        return this.list(onlyOpen)
+    }
+
+    func Update(t Todo) Task<void!> {
+        return this.update(t)
+    }
+
+    func Delete(id int) Task<void!> {
+        return this.delete(id)
+    }
+
+    async func add(t Todo) Todo! {
+        await this.mu.Lock()
+        defer this.mu.Unlock()
+        t.Id = this.nextId
+        this.nextId += 1
+        this.items = append(this.items, t)
+        return t
+    }
+
+    async func get(id int) Todo! {
+        await this.mu.Lock()
+        defer this.mu.Unlock()
+        for t in this.items {
+            if t.Id == id {
+                return t
+            }
+        }
+        return errors.Wrap(ErrNotFound, fmt.Format("todo {0}", id))
+    }
+
+    async func list(onlyOpen bool) []Todo! {
+        await this.mu.Lock()
+        defer this.mu.Unlock()
+        var out []Todo = []
+        for t in this.items {
+            if !onlyOpen || !t.Done {
+                out = append(out, t)
+            }
+        }
+        return out
+    }
+
+    async func update(t Todo) void! {
+        await this.mu.Lock()
+        defer this.mu.Unlock()
+        for i, old in this.items {
+            if old.Id == t.Id {
+                this.items[i] = t
+                return
+            }
+        }
+        return errors.Wrap(ErrNotFound, fmt.Format("todo {0}", t.Id))
+    }
+
+    async func delete(id int) void! {
+        await this.mu.Lock()
+        defer this.mu.Unlock()
+        for i, t in this.items {
+            if t.Id == id {
+                this.items = slices.Delete(this.items, i, i + 1)
+                return
+            }
+        }
+        return errors.Wrap(ErrNotFound, fmt.Format("todo {0}", id))
+    }
+}

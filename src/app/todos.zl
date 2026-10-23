@@ -1,0 +1,48 @@
+// Use cases: what the service can do, written against the repository
+// interface only.
+namespace todo.app
+
+import todo.domain
+
+// TodoService implements the use cases of the todo list.
+struct TodoService {
+    repo TodoRepository
+
+    // New is the constructor the DI container calls (the repository is
+    // injected by its interface).
+    static func New(repo TodoRepository) *TodoService {
+        return new TodoService{repo: repo}
+    }
+
+    // Create validates the title and stores a new todo.
+    async func Create(title string) Todo! {
+        var t = NewTodo(title)?
+        return await this.repo.Add(t)?
+    }
+
+    // Get returns one todo.
+    async func Get(id int) Todo! {
+        return await this.repo.Get(id)?
+    }
+
+    // List returns all todos, or only the open ones.
+    async func List(onlyOpen bool) []Todo! {
+        return await this.repo.List(onlyOpen)?
+    }
+
+    // Complete marks a todo done; completing it twice is ErrConflict.
+    async func Complete(id int) Todo! {
+        var t = await this.repo.Get(id)?
+        if t.Done {
+            return errors.Wrap(ErrConflict, fmt.Format("todo {0} is already done", id))
+        }
+        t.Done = true
+        await this.repo.Update(t)?
+        return t
+    }
+
+    // Delete removes a todo.
+    async func Delete(id int) void! {
+        await this.repo.Delete(id)?
+    }
+}

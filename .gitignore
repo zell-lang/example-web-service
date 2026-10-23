@@ -1,0 +1,9 @@
+.zell/
+build/
+target/
+*.o
+*.db
+server.log
+transcript.txt
+metrics.txt
+openapi.json

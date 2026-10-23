@@ -1,0 +1,42 @@
+// The todo service: configuration, wiring and graceful shutdown.
+namespace todoserver
+
+import database
+
+import todo.api as api
+import todo.domain
+import todo.infra
+
+async func main() void! {
+    var b = zconf.NewBuilder()
+    b.AddYamlFile("appsettings.yaml", true).AddDotEnvFile(
+        ".env",
+        "TODO_",
+        true,
+    ).AddEnvironmentVariables("TODO_")
+    var settings = zconf.Load<Settings>(b, os.Args()[1..])?("configuration")
+
+    var db = sqlite.Open(settings.Database)
+    db.SetMaxOpenConns(1)
+    defer db.Close()
+
+    var app = api.NewApp(settings.Environment)
+    app.Services.AddInstance(new todo.infra.Database{Db: db})
+    app.Services.AddSingleton<TodoRepository, SqliteRepository>()
+    app.AddHealthCheck("sqlite", async func() void! {
+        await db.Ping()?
+    })
+    app.MapHealthChecks("/health")
+
+    await todo.infra.Migrate(db)?("migrate")
+
+    app.Listen(settings.Addr)?
+    log.Global().Information("listening on {Url}", app.URL())
+    var serving = app.Run(settings.Addr)
+
+    var sig = await os.signal.WaitAny([os.signal.SIGINT, os.signal.SIGTERM])
+    log.Global().Information("{Signal}: shutting down", os.signal.Name(sig))
+    await app.Shutdown()
+    await serving?
+    log.Global().Information("stopped")
+}

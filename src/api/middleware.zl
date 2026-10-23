@@ -1,0 +1,42 @@
+namespace todo.api
+
+import web
+
+// Prometheus metrics of the service (served on /metrics).
+var requestsTotal = diag.NewCounter("http_requests_total", "HTTP requests by method and status", [
+    "method",
+    "status",
+])
+var todosCreated = diag.NewCounter("todos_created_total", "Todos created", [])
+
+// metrics counts every request by method and status.
+async func metrics(c *Context, next *Next) void! {
+    await next.Run(c)?
+    requestsTotal.With([c.Request.Method, strconv.Itoa(c.Response.Status)]).Inc()
+}
+
+// traceparent answers with the W3C trace context of the request's span
+// (UseTracing starts it; an incoming traceparent header is its parent),
+// so a client can correlate its call with the server's logs and traces.
+async func traceparent(c *Context, next *Next) void! {
+    c.Response.SetHeader("traceparent", diag.Traceparent())
+    await next.Run(c)?
+}
+
+// hideServerErrors is the last line of defence: a 5xx produced anywhere
+// (a panic caught by UseRecover, an error passed up with ?) keeps its
+// status but loses its detail, which may hold internal messages.
+async func hideServerErrors(c *Context, next *Next) void! {
+    try await next.Run(c) catch err {
+        log.Global().Error(err, "request failed: {ErrorMessage}", err.Message())
+        c.Response.Status = 500
+    }
+    if c.Response.Status >= 500 && !strings.Contains(c.Response.Body, "request id") {
+        c.Response.SetHeader("Content-Type", "application/problem+json")
+        c.Response.Body = fmt.Format(
+            "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":{0},\"detail\":\"an unexpected error occurred (request id {1})\"}",
+            c.Response.Status,
+            c.RequestId,
+        )
+    }
+}

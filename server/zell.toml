@@ -1,0 +1,9 @@
+[package]
+name = "todo-server"
+version = "0.1.0"
+namespace = "todoserver"
+entry = "src/main.zl"
+
+[dependencies]
+example-web-service = { path = ".." }
+"github.com/zell-lang/zconf" = "^0.1"

@@ -1,0 +1,21 @@
+namespace todo.domain
+
+// TodoRepository stores todos. Implementations live in todo.infra
+// (SQLite for production, in-memory for tests).
+interface TodoRepository {
+    // Add stores t and returns it with its new Id.
+    func Add(t Todo) Task<Todo!>
+
+    // Get returns the todo with id, or ErrNotFound.
+    func Get(id int) Task<Todo!>
+
+    // List returns every todo ordered by Id, only the open ones when
+    // onlyOpen is true.
+    func List(onlyOpen bool) Task<[]Todo!>
+
+    // Update replaces the stored todo with the same Id (ErrNotFound).
+    func Update(t Todo) Task<void!>
+
+    // Delete removes the todo with id (ErrNotFound).
+    func Delete(id int) Task<void!>
+}

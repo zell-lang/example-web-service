@@ -1,0 +1,4 @@
+[package]
+name = "example-web-service"
+version = "0.1.0"
+namespace = "todo"

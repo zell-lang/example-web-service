@@ -1,0 +1,18 @@
+namespace todo.domain
+
+// ErrNotFound: the requested todo does not exist.
+const ErrNotFound = error("todo not found")
+
+// ErrConflict: the operation contradicts the todo's state (completing a
+// todo twice).
+const ErrConflict = error("conflict")
+
+// ValidationError: input that breaks an invariant of the domain.
+struct ValidationError {
+    Field  string
+    Reason string
+
+    func Message() string {
+        return this.Field + ": " + this.Reason
+    }
+}

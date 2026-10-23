@@ -1,0 +1,40 @@
+namespace todo.api
+
+import web
+
+import todo.app
+
+// NewApp creates the web application of the service ("development"
+// adds error traces to 500 responses) and configures it.
+func NewApp(environment string) *App {
+    var app = NewAppWith(AppOptions{Title: "Todo API", Version: "1.0.0", Environment: environment})
+    Configure(app)
+    return app
+}
+
+// Configure registers the use cases, the middleware pipeline and every
+// route on app. The caller registers the TodoRepository implementation.
+func Configure(app *App) {
+    app.Services.AddSingleton<TodoService>()
+
+    // outermost first
+    app.UseRequestId(RequestIdOptions{})
+    app.Use(hideServerErrors)
+    app.UseRecover()
+    app.UseTracing()
+    app.Use(traceparent)
+    app.UseLogging()
+    app.Use(metrics)
+
+    app.MapController<TodosController>()
+    app.MapGet("/healthz", () => "ok")
+    app.Map("GET", "/metrics", serveMetrics)
+    app.MapOpenApi("/openapi.json")
+    app.MapSwagger("/swagger", "/openapi.json")
+}
+
+async func serveMetrics(c *Context) void! {
+    c.Response.Status = 200
+    c.Response.SetHeader("Content-Type", "text/plain; version=0.0.4")
+    c.Response.Body = diag.PrometheusText()
+}

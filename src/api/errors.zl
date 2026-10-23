@@ -1,0 +1,30 @@
+namespace todo.api
+
+import web
+
+import todo.domain
+
+// Fail maps an error of the use cases to an HTTP result:
+// ValidationError -> 400 validation problem, ErrNotFound -> 404,
+// ErrConflict -> 409, anything else -> 500 with a generic detail (the
+// message is logged with the request id, never sent to the client).
+func Fail<T>(c *Context, err error) Result<T> {
+    var v ValidationError
+    if errors.As(err, &v) {
+        return ValidationProblem<T>([FieldError{Field: v.Field, Message: v.Reason}])
+    }
+    if errors.Is(err, ErrNotFound) {
+        return Problem<T>(404, "", err.Message())
+    }
+    if errors.Is(err, ErrConflict) {
+        return Problem<T>(409, "", err.Message())
+    }
+    log.Global().Error(
+        err,
+        "unhandled error in {RequestPath} [{RequestId}]: {ErrorMessage}",
+        c.Request.Path,
+        c.RequestId,
+        err.Message(),
+    )
+    return Problem<T>(500, "", "an unexpected error occurred (request id " + c.RequestId + ")")
+}

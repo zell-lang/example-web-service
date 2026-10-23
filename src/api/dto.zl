@@ -1,0 +1,24 @@
+// The HTTP surface: DTOs, the controller, error mapping and middleware.
+namespace todo.api
+
+import web
+
+import todo.domain
+
+// CreateTodoRequest is the body of POST /api/todos.
+struct CreateTodoRequest {
+    // Presence is checked here; the length rules are the domain's
+    // (domain.NewTodo), so they hold for every caller, not only HTTP.
+    @validate(required: true) Title string
+}
+
+// TodoResponse is a todo as the API returns it.
+struct TodoResponse {
+    @json(name: "id")    Id    int
+    @json(name: "title") Title string
+    @json(name: "done")  Done  bool
+}
+
+func toResponse(t Todo) TodoResponse {
+    return TodoResponse{Id: t.Id, Title: t.Title, Done: t.Done}
+}

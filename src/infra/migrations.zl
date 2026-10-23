@@ -1,0 +1,23 @@
+namespace todo.infra.migrations
+
+import data
+
+// The schema of the todos table (applied by SqliteRepository.Migrate).
+@migration("20261023000000_CreateTodos")
+struct CreateTodos {
+    func Up(m *Migrator) {
+        m.CreateTable(
+            "todos",
+            [
+                Column{Name: "id", Type: "int64", Key: true, Auto: true},
+                Column{Name: "title", Type: "string", MaxLength: 100},
+                Column{Name: "done", Type: "bool"},
+            ],
+            [],
+        )
+    }
+
+    func Down(m *Migrator) {
+        m.DropTable("todos")
+    }
+}

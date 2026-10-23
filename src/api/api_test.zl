@@ -1,0 +1,95 @@
+// HTTP tests through the framework's in-memory test client, with the
+// in-memory repository registered in place of SQLite. Async examples:
+// zell test compares their output with the // Output: comment.
+namespace todo.api
+
+import io
+import web
+
+import todo.domain
+import todo.infra
+
+func testApp() *App {
+    var app = NewApp("production")
+    app.Services.AddSingleton<TodoRepository, MemoryRepository>()
+    return app
+}
+
+async func ExampleConfigure_crud() void! {
+    var c = TestServer(testApp())?
+    var r = await c.Post("/api/todos", "{\"Title\": \"buy milk\"}")
+    println(r.Status, r.Header("Location"), r.Body)
+    r = await c.Post("/api/todos", "{\"Title\": \"write docs\"}")
+    println(r.Status)
+    r = await c.Get("/api/todos/1")
+    println(r.Status, r.Body)
+    r = await c.Post("/api/todos/1/complete", "")
+    println(r.Status, r.Body)
+    r = await c.Get("/api/todos?open=true")
+    println(r.Status, r.Body)
+    r = await c.Delete("/api/todos/2")
+    println(r.Status)
+    var all = await c.GetJSON<[]TodoResponse>("/api/todos")?
+    println(len(all), all[0].Title, all[0].Done)
+    // Output:
+    // 201 /api/todos/1 {"id":1,"title":"buy milk","done":false}
+    // 201
+    // 200 {"id":1,"title":"buy milk","done":false}
+    // 200 {"id":1,"title":"buy milk","done":true}
+    // 200 [{"id":2,"title":"write docs","done":false}]
+    // 204
+    // 1 buy milk true
+}
+
+async func ExampleConfigure_errors() void! {
+    var c = TestServer(testApp())?
+    var r = await c.Get("/api/todos/99")
+    println(r.Status, r.Header("Content-Type"))
+    var p = encoding.json.ParseValue(r.Body)?
+    println(p.Get("detail").String()?)
+    r = await c.Post("/api/todos", "{\"Title\": \"" + strings.Repeat("x", 101) + "\"}")
+    println(r.Status, encoding.json.ParseValue(r.Body)?.Get("errors").Format())
+    r = await c.Post("/api/todos", "{}")
+    println(r.Status, encoding.json.ParseValue(r.Body)?.Get("errors").Format())
+    _ = await c.Post("/api/todos", "{\"Title\": \"x\"}")
+    _ = await c.Post("/api/todos/1/complete", "")
+    r = await c.Post("/api/todos/1/complete", "")
+    println(r.Status, encoding.json.ParseValue(r.Body)?.Get("detail").String()?)
+    r = await c.Get("/api/todos/abc")
+    println(r.Status)
+    // Output:
+    // 404 application/problem+json
+    // todo 99: todo not found
+    // 400 {"title":["must be at most 100 characters"]}
+    // 400 {"Title":["The Title field is required."]}
+    // 409 todo 1 is already done: conflict
+    // 400
+}
+
+async func ExampleConfigure_operations() void! {
+    var c = TestServer(testApp())?
+    var r = await c.Get("/healthz")
+    println(
+        r.Status,
+        r.Body,
+        r.Header("X-Request-Id") != "",
+        strings.HasPrefix(r.Header("traceparent"), "00-"),
+    )
+    _ = await c.Post("/api/todos", "{\"Title\": \"count me\"}")
+    r = await c.Get("/metrics")
+    println(r.Status, strings.Contains(r.Body, "todos_created_total 1"))
+    var doc = encoding.json.ParseValue((await c.Get("/openapi.json")).Body)?
+    println(doc.Get("openapi").String()?, doc.Get("info").Get("title").String()?)
+    for p in doc.Get("paths").Keys() {
+        println(" ", p, doc.Get("paths").Get(p).Keys())
+    }
+    // Output:
+    // 200 ok true true
+    // 200 true
+    // 3.1.0 Todo API
+    //   /api/todos [get post]
+    //   /api/todos/{id} [get delete]
+    //   /api/todos/{id}/complete [post]
+    //   /healthz [get]
+    //   /metrics [get]
+}

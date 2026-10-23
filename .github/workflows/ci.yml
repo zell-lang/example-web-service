@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Zell
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/zell-lang/zell/master/scripts/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Test (use cases + HTTP)
+        run: zell test
+      - name: Build the server
+        working-directory: server
+        run: zell build --release

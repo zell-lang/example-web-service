@@ -1,0 +1,58 @@
+namespace todo.api
+
+import web
+
+import todo.app
+
+// TodosController: CRUD over /api/todos. The service is injected by the
+// DI container into the field.
+@route("/api/todos")
+struct TodosController {
+    todos *TodoService
+
+    @get("")
+    @summary("List todos (open=true: only the open ones)")
+    async func List(open bool, c *Context) Result<[]TodoResponse> {
+        var items = try await this.todos.List(open) catch err {
+            return Fail<[]TodoResponse>(c, err)
+        }
+        return Ok(slices.Map(items, toResponse))
+    }
+
+    @get("{id}")
+    @summary("Get one todo")
+    async func Get(id int, c *Context) Result<TodoResponse> {
+        var t = try await this.todos.Get(id) catch err {
+            return Fail<TodoResponse>(c, err)
+        }
+        return Ok(toResponse(t))
+    }
+
+    @post("")
+    @summary("Create a todo")
+    async func Create(@body req CreateTodoRequest, c *Context) Result<TodoResponse> {
+        var t = try await this.todos.Create(req.Title) catch err {
+            return Fail<TodoResponse>(c, err)
+        }
+        todosCreated.Inc()
+        return CreatedAt("/api/todos/" + strconv.Itoa(t.Id), toResponse(t))
+    }
+
+    @post("{id}/complete")
+    @summary("Mark a todo done")
+    async func Complete(id int, c *Context) Result<TodoResponse> {
+        var t = try await this.todos.Complete(id) catch err {
+            return Fail<TodoResponse>(c, err)
+        }
+        return Ok(toResponse(t))
+    }
+
+    @delete("{id}")
+    @summary("Delete a todo")
+    async func Delete(id int, c *Context) Result<string> {
+        try await this.todos.Delete(id) catch err {
+            return Fail<string>(c, err)
+        }
+        return NoContent()
+    }
+}
